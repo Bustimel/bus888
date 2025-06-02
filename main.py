@@ -1,52 +1,50 @@
+import asyncio
+import logging
 from aiogram import Bot, Dispatcher, types
 from aiogram.types import Message, CallbackQuery
-from aiogram.utils import executor
-from aiogram.contrib.fsm_storage.memory import MemoryStorage
-from aiogram.dispatcher import FSMContext
-import logging
-import datetime
+from aiogram.fsm.storage.memory import MemoryStorage
+from aiogram.fsm.context import FSMContext
 
 from src.routes import extract_cities_from_text
-from src.responses import greet_user, unknown_request, confirm_direction, send_route_info
+from src.responses import greet_user, unknown_request, confirm_direction
 from src.kb import yes_no_kb
 from src.states import BookingForm
 
-# === Конфігурація ===
-API_TOKEN = "8011978121:AAEKgT0bCuM5bkb4pm8ddUaWQMKEJGyjFYs"
+API_TOKEN = "ТВОЙ_ТОКЕН"  # 🔒 ОБОВ’ЯЗКОВО винеси в secrets!
+
 ADMIN_ID = 6132154171
 
-# === Логування та ініціалізація ===
+# === Логування ===
 logging.basicConfig(level=logging.INFO)
-bot = Bot(token=API_TOKEN, parse_mode=types.ParseMode.HTML)
-dp = Dispatcher(bot, storage=MemoryStorage())
 
-# === Старт-команда ===
-@dp.message_handler(commands=["start", "help"])
+# === Ініціалізація бота і диспетчера ===
+bot = Bot(token=API_TOKEN, parse_mode="HTML")
+dp = Dispatcher(storage=MemoryStorage())
+
+
+@dp.message(commands=["start", "help"])
 async def cmd_start(msg: Message):
     await msg.answer(greet_user())
 
-# === Основна логіка обробки повідомлень ===
-@dp.message_handler(state="*")
+
+@dp.message()
 async def handle_message(msg: Message, state: FSMContext):
     text = msg.text.strip()
     user_id = msg.from_user.id
     current_state = await state.get_state()
 
-    # === FSM: Ім’я ===
     if current_state == BookingForm.waiting_for_name.state:
         await state.update_data(name=text)
         await msg.answer("📞 Введіть ваш номер телефону:")
-        await BookingForm.waiting_for_phone.set()
+        await state.set_state(BookingForm.waiting_for_phone)
         return
 
-    # === FSM: Телефон ===
     if current_state == BookingForm.waiting_for_phone.state:
         await state.update_data(phone=text)
         await msg.answer("📅 Введіть дату поїздки (день місяць рік):")
-        await BookingForm.waiting_for_date.set()
+        await state.set_state(BookingForm.waiting_for_date)
         return
 
-    # === FSM: Дата ===
     if current_state == BookingForm.waiting_for_date.state:
         await state.update_data(date=text)
         data = await state.get_data()
@@ -67,10 +65,9 @@ async def handle_message(msg: Message, state: FSMContext):
 
         await bot.send_message(ADMIN_ID, application)
         await msg.answer("✅ Дякуємо! Заявку прийнято. Наш диспетчер зв’яжеться з вами найближчим часом.")
-        await state.finish()
+        await state.clear()
         return
 
-    # === Обробка напрямку (міста) ===
     cities = extract_cities_from_text(text.lower())
 
     if len(cities) == 2:
@@ -88,24 +85,28 @@ async def handle_message(msg: Message, state: FSMContext):
     else:
         await msg.answer(unknown_request())
 
-# === Callback "Так" — підтвердження напрямку ===
-@dp.callback_query_handler(lambda c: c.data.startswith("confirm:"))
+
+@dp.callback_query(lambda c: c.data.startswith("confirm:"))
 async def process_confirm(call: CallbackQuery, state: FSMContext):
     _, start, end = call.data.split(":")
     await state.update_data(start=start, end=end)
     await call.message.answer("🧾 Введіть ваше ім’я:")
-    await BookingForm.waiting_for_name.set()
+    await state.set_state(BookingForm.waiting_for_name)
     await call.answer()
 
-# === Callback "Навпаки" — зміна напрямку ===
-@dp.callback_query_handler(lambda c: c.data.startswith("reverse:"))
+
+@dp.callback_query(lambda c: c.data.startswith("reverse:"))
 async def process_reverse(call: CallbackQuery, state: FSMContext):
     _, start, end = call.data.split(":")
     await state.update_data(start=end, end=start)
     await call.message.answer("🧾 Введіть ваше ім’я:")
-    await BookingForm.waiting_for_name.set()
+    await state.set_state(BookingForm.waiting_for_name)
     await call.answer()
 
-# === Запуск бота ===
-if __name__ == '__main__':
-    executor.start_polling(dp, skip_updates=True)
+
+async def main():
+    await dp.start_polling(bot)
+
+
+if __name__ == "__main__":
+    asyncio.run(main())
