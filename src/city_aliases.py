@@ -34,8 +34,14 @@ CITY_ALIASES = {
     # Додай інші міста за потреби
 }
 
-# Автоматична генерація зворотного словника
 ALIAS_TO_CITY = {}
 for city, aliases in CITY_ALIASES.items():
     for alias in aliases:
         ALIAS_TO_CITY[alias.strip().lower()] = city
+
+def normalize_city(text: str) -> str:
+    """
+    Приводить назву міста до нормалізованої форми (ключ CITY_ALIASES).
+    """
+    text = text.strip().lower()
+    return ALIAS_TO_CITY.get(text)
