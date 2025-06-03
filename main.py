@@ -16,7 +16,7 @@ from src.responses import greet_user, unknown_request, confirm_direction
 from src.kb import yes_no_kb
 from src.states import BookingForm
 
-API_TOKEN = "ТВОЙ_ТОКЕН_ТУТ"
+API_TOKEN = "8011978121:AAEKgT0bCuM5bkb4pm8ddUaWQMKEJGyjFYs"
 ADMIN_ID = 6132154171
 
 # === Ініціалізація ===
